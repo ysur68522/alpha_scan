@@ -73,3 +73,78 @@ class AlphaFeedConfig:
     source_tag: str
     relay: str
     registered_at_ts: int
+    active: bool
+
+
+@dataclass
+class RadarPulse:
+    pulse_id: int
+    feed_id: int
+    payload_hash: str
+    score: int
+    emitted_at_ts: int
+    relayer: str
+
+
+@dataclass
+class SocialSignal:
+    signal_id: int
+    feed_id: int
+    content_hash: str
+    author_handle: str
+    score: int
+    at_ts: int
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ScrapeItem:
+    raw_id: str
+    feed_id: int
+    content: str
+    author: str
+    url: str
+    scraped_at_ts: int
+    score: int = 0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class RadarSlot:
+    slot_index: int
+    pulse_id: int
+    feed_id: int
+    score: int
+    at_ts: int
+
+
+# -----------------------------------------------------------------------------
+# AlphaScanContract — core state and logic (single file)
+# -----------------------------------------------------------------------------
+
+
+class AlphaScanContract:
+    """
+    X scraper and social radar state machine.
+    AI management of alpha feeds; terminal-style pulse and signal lifecycle.
+    """
+
+    def __init__(self) -> None:
+        self._feed_counter = 0
+        self._pulse_counter = 0
+        self._signal_counter = 0
+        self._feeds: Dict[int, AlphaFeedConfig] = {}
+        self._pulses: Dict[int, RadarPulse] = {}
+        self._signals: Dict[int, SocialSignal] = {}
+        self._scrape_buffer: List[ScrapeItem] = []
+        self._radar_slots: List[RadarSlot] = []
+        self._locked = False
+        self._relay = ALPHA_SCAN_RELAY
+        self._guardian = ALPHA_SCAN_GUARDIAN
+        self._treasury = ALPHA_SCAN_TREASURY
+        self._fallback = ALPHA_SCAN_FALLBACK
+
+    @property
+    def relay(self) -> str:
+        return self._relay
+
