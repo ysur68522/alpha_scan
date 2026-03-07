@@ -1198,3 +1198,78 @@ def pulse_ids_since(contract: AlphaScanContract, since_ts: int) -> List[int]:
 
 
 def signal_ids_since(contract: AlphaScanContract, since_ts: int) -> List[int]:
+    return [s.signal_id for s in contract._signals.values() if s.at_ts >= since_ts]
+
+
+def feed_ids_added_since(contract: AlphaScanContract, since_ts: int) -> List[int]:
+    return [f.feed_id for f in contract._feeds.values() if f.registered_at_ts >= since_ts]
+
+
+# -----------------------------------------------------------------------------
+# Score distribution stats
+# -----------------------------------------------------------------------------
+
+
+def score_distribution(pulses: List[RadarPulse]) -> Dict[str, int]:
+    bands = {"S": 0, "A": 0, "B": 0, "C": 0, "D": 0}
+    for p in pulses:
+        bands[score_band(p.score)] = bands.get(score_band(p.score), 0) + 1
+    return bands
+
+
+def score_distribution_signals(signals: List[SocialSignal]) -> Dict[str, int]:
+    bands = {"S": 0, "A": 0, "B": 0, "C": 0, "D": 0}
+    for s in signals:
+        bands[score_band(s.score)] = bands.get(score_band(s.score), 0) + 1
+    return bands
+
+
+# -----------------------------------------------------------------------------
+# Guard wrappers for safe calls
+# -----------------------------------------------------------------------------
+
+
+def safe_register_feed(contract: AlphaScanContract, tag: str, caller: str) -> Optional[int]:
+    try:
+        return contract.register_feed(tag, caller)
+    except ValueError:
+        return None
+
+
+def safe_emit_pulse(contract: AlphaScanContract, feed_id: int, payload_hash: str, score: int, caller: str) -> Optional[int]:
+    try:
+        return contract.emit_pulse(feed_id, payload_hash, clamp_score(score), caller)
+    except ValueError:
+        return None
+
+
+def safe_score_signal(contract: AlphaScanContract, feed_id: int, content_hash: str, author: str, score: int, caller: str) -> Optional[int]:
+    try:
+        return contract.score_signal(feed_id, content_hash, author, score, caller)
+    except ValueError:
+        return None
+
+
+# -----------------------------------------------------------------------------
+# Aggregate stats for dashboard
+# -----------------------------------------------------------------------------
+
+
+def total_pulses_by_feed(contract: AlphaScanContract) -> Dict[int, int]:
+    return pulse_count_per_feed(contract)
+
+
+def total_signals_by_feed(contract: AlphaScanContract) -> Dict[int, int]:
+    return signal_count_per_feed(contract)
+
+
+def avg_score_overall(contract: AlphaScanContract) -> float:
+    pulses = list(contract._pulses.values())
+    if not pulses:
+        return 0.0
+    return sum(p.score for p in pulses) / len(pulses)
+
+
+def avg_score_signals_overall(contract: AlphaScanContract) -> float:
+    signals = list(contract._signals.values())
+    if not signals:
