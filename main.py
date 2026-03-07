@@ -1048,3 +1048,78 @@ def feed_health(contract: AlphaScanContract, feed_id: int) -> Dict[str, Any]:
         "active": cfg.active,
         "pulse_count": len(pulses),
         "signal_count": len(signals),
+        "latest_pulse_ts": latest_ts,
+        "stale": (int(time.time()) - latest_ts) > MAX_PULSE_AGE_SEC if pulses else True,
+    }
+
+
+def all_feeds_health(contract: AlphaScanContract) -> Dict[int, Dict[str, Any]]:
+    return {fid: feed_health(contract, fid) for fid in contract._feeds}
+
+
+# -----------------------------------------------------------------------------
+# Terminal banner and version
+# -----------------------------------------------------------------------------
+
+
+def terminal_banner() -> str:
+    return f"alpha_scan v{ALPHA_SCAN_VERSION} | {ALPHA_SCAN_NAMESPACE} | feeds={MAX_FEEDS} pulses={MAX_PULSE_AGE_SEC}s"
+
+
+def version_string() -> str:
+    return f"{ALPHA_SCAN_VERSION}"
+
+
+def namespace_string() -> str:
+    return ALPHA_SCAN_NAMESPACE
+
+
+# -----------------------------------------------------------------------------
+# Extended validators and sanitizers
+# -----------------------------------------------------------------------------
+
+
+def sanitize_source_tag(tag: str, max_len: int = 64) -> str:
+    s = re.sub(r"[^\w\-.]", "_", tag.strip())[:max_len]
+    return s or "unnamed"
+
+
+def sanitize_author_handle(handle: str, max_len: int = 64) -> str:
+    return normalize_handle(handle)[:max_len]
+
+
+def clamp_score(score: int) -> int:
+    return max(SCORE_MIN, min(SCORE_MAX, score))
+
+
+# -----------------------------------------------------------------------------
+# Batch operations with error collection
+# -----------------------------------------------------------------------------
+
+
+def register_feeds_batch(contract: AlphaScanContract, tags: List[str], caller: str) -> List[int]:
+    ids = []
+    for tag in tags:
+        try:
+            fid = contract.register_feed(sanitize_source_tag(tag), caller)
+            ids.append(fid)
+        except ValueError:
+            pass
+    return ids
+
+
+def emit_pulses_batch(contract: AlphaScanContract, feed_id: int, payloads: List[Dict[str, Any]], caller: str) -> List[int]:
+    ids = []
+    for pl in payloads:
+        try:
+            h = payload_hash(pl)
+            score = pl.get("score", SCORE_MIN)
+            pid = contract.emit_pulse(feed_id, h, clamp_score(score), caller)
+            ids.append(pid)
+        except ValueError:
+            pass
+    return ids
+
+
+# -----------------------------------------------------------------------------
+# Radar slot summary
