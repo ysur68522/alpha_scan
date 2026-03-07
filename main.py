@@ -898,3 +898,78 @@ def log_event(event_type: str, payload: Dict[str, Any]) -> None:
 def get_event_log(limit: int = 100) -> List[EventLogEntry]:
     return _event_log[-limit:] if _event_log else []
 
+
+def clear_event_log() -> None:
+    _event_log.clear()
+
+
+def event_log_to_lines(entries: List[EventLogEntry]) -> List[str]:
+    return [f"{e.at_ts} | {e.event_type} | {json.dumps(e.payload)[:60]}..." for e in entries]
+
+
+# -----------------------------------------------------------------------------
+# Role and address helpers
+# -----------------------------------------------------------------------------
+
+
+def is_relay(contract: AlphaScanContract, addr: str) -> bool:
+    return addr == contract.relay
+
+
+def is_guardian(contract: AlphaScanContract, addr: str) -> bool:
+    return addr == contract.guardian
+
+
+def is_treasury(contract: AlphaScanContract, addr: str) -> bool:
+    return addr == contract.treasury
+
+
+def get_role_addresses(contract: AlphaScanContract) -> Dict[str, str]:
+    return {
+        "relay": contract.relay,
+        "guardian": contract.guardian,
+        "treasury": contract.treasury,
+        "fallback": contract.fallback,
+    }
+
+
+# -----------------------------------------------------------------------------
+# Score bands (Bloomberg-style tiers)
+# -----------------------------------------------------------------------------
+
+
+def score_band(score: int) -> str:
+    if score >= 8000:
+        return "S"
+    if score >= 6000:
+        return "A"
+    if score >= 4000:
+        return "B"
+    if score >= 2000:
+        return "C"
+    return "D"
+
+
+def score_band_from_pulses(pulses: List[RadarPulse]) -> str:
+    if not pulses:
+        return "D"
+    avg = sum(p.score for p in pulses) / len(pulses)
+    return score_band(int(avg))
+
+
+# -----------------------------------------------------------------------------
+# Deduplication and content filter
+# -----------------------------------------------------------------------------
+
+
+def dedupe_by_content_hash(signals: List[SocialSignal]) -> List[SocialSignal]:
+    seen: Dict[str, SocialSignal] = {}
+    for s in signals:
+        if s.content_hash not in seen or s.score > seen[s.content_hash].score:
+            seen[s.content_hash] = s
+    return list(seen.values())
+
+
+def dedupe_pulses_by_feed_slot(pulses: List[RadarPulse]) -> List[RadarPulse]:
+    by_slot: Dict[int, RadarPulse] = {}
+    for p in pulses:
