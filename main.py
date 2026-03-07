@@ -223,3 +223,78 @@ class AlphaScanContract:
 
     def score_signal(self, feed_id: int, content_hash: str, author_handle: str, score: int, caller: str) -> int:
         self._require_relay(caller)
+        if feed_id not in self._feeds:
+            raise ValueError(ASCError.FEED_CAP)
+        if not (SCORE_MIN <= score <= SCORE_MAX):
+            raise ValueError(ASCError.INVALID_SCORE)
+        self._signal_counter += 1
+        sid = self._signal_counter
+        sig = SocialSignal(
+            signal_id=sid,
+            feed_id=feed_id,
+            content_hash=content_hash,
+            author_handle=author_handle,
+            score=score,
+            at_ts=int(time.time()),
+            metadata={},
+        )
+        self._signals[sid] = sig
+        return sid
+
+    def push_scrape_batch(self, items: Sequence[ScrapeItem], caller: str) -> int:
+        self._require_relay(caller)
+        if self._locked:
+            raise ValueError(ASCError.RADAR_LOCKED)
+        if len(items) > BATCH_SCRAPE_MAX:
+            raise ValueError(ASCError.FEED_CAP)
+        for item in items:
+            if item.feed_id not in self._feeds:
+                continue
+            self._scrape_buffer.append(item)
+        return len(self._scrape_buffer)
+
+    def set_feed_active(self, feed_id: int, active: bool, caller: str) -> None:
+        self._require_guardian(caller)
+        if feed_id not in self._feeds:
+            raise ValueError(ASCError.FEED_CAP)
+        cfg = self._feeds[feed_id]
+        self._feeds[feed_id] = AlphaFeedConfig(
+            feed_id=cfg.feed_id,
+            source_tag=cfg.source_tag,
+            relay=cfg.relay,
+            registered_at_ts=cfg.registered_at_ts,
+            active=active,
+        )
+
+    def set_radar_locked(self, locked: bool, caller: str) -> None:
+        self._require_guardian(caller)
+        self._locked = locked
+
+    def get_feed(self, feed_id: int) -> Optional[AlphaFeedConfig]:
+        return self._feeds.get(feed_id)
+
+    def get_pulse(self, pulse_id: int) -> Optional[RadarPulse]:
+        return self._pulses.get(pulse_id)
+
+    def get_signal(self, signal_id: int) -> Optional[SocialSignal]:
+        return self._signals.get(signal_id)
+
+    def get_feed_count(self) -> int:
+        return self._feed_counter
+
+    def get_pulse_count(self) -> int:
+        return self._pulse_counter
+
+    def get_signal_count(self) -> int:
+        return self._signal_counter
+
+    def get_radar_slots(self) -> List[RadarSlot]:
+        return list(self._radar_slots)
+
+    def get_pulses_for_feed(self, feed_id: int, limit: int = 50) -> List[RadarPulse]:
+        out = [p for p in self._pulses.values() if p.feed_id == feed_id]
+        out.sort(key=lambda p: p.emitted_at_ts, reverse=True)
+        return out[:limit]
+
+    def get_signals_for_feed(self, feed_id: int, limit: int = 50) -> List[SocialSignal]:
+        out = [s for s in self._signals.values() if s.feed_id == feed_id]
