@@ -148,3 +148,78 @@ class AlphaScanContract:
     def relay(self) -> str:
         return self._relay
 
+    @property
+    def guardian(self) -> str:
+        return self._guardian
+
+    @property
+    def treasury(self) -> str:
+        return self._treasury
+
+    @property
+    def fallback(self) -> str:
+        return self._fallback
+
+    @property
+    def locked(self) -> bool:
+        return self._locked
+
+    def _require_relay(self, caller: str) -> None:
+        if caller != self._relay:
+            raise ValueError(ASCError.NOT_RELAY)
+
+    def _require_guardian(self, caller: str) -> None:
+        if caller != self._guardian:
+            raise ValueError(ASCError.NOT_GUARDIAN)
+
+    def register_feed(self, source_tag: str, caller: str) -> int:
+        self._require_relay(caller)
+        if self._feed_counter >= MAX_FEEDS:
+            raise ValueError(ASCError.FEED_CAP)
+        self._feed_counter += 1
+        fid = self._feed_counter
+        cfg = AlphaFeedConfig(
+            feed_id=fid,
+            source_tag=source_tag,
+            relay=caller,
+            registered_at_ts=int(time.time()),
+            active=True,
+        )
+        self._feeds[fid] = cfg
+        return fid
+
+    def emit_pulse(self, feed_id: int, payload_hash: str, score: int, caller: str) -> int:
+        self._require_relay(caller)
+        if feed_id not in self._feeds or not self._feeds[feed_id].active:
+            raise ValueError(ASCError.FEED_CAP)
+        if not (SCORE_MIN <= score <= SCORE_MAX):
+            raise ValueError(ASCError.INVALID_SCORE)
+        self._pulse_counter += 1
+        pid = self._pulse_counter
+        pulse = RadarPulse(
+            pulse_id=pid,
+            feed_id=feed_id,
+            payload_hash=payload_hash,
+            score=score,
+            emitted_at_ts=int(time.time()),
+            relayer=caller,
+        )
+        self._pulses[pid] = pulse
+        self._update_radar_slot(pulse)
+        return pid
+
+    def _update_radar_slot(self, pulse: RadarPulse) -> None:
+        slot_idx = pulse.feed_id % RADAR_SLOT_COUNT
+        new_slot = RadarSlot(
+            slot_index=slot_idx,
+            pulse_id=pulse.pulse_id,
+            feed_id=pulse.feed_id,
+            score=pulse.score,
+            at_ts=pulse.emitted_at_ts,
+        )
+        self._radar_slots = [s for s in self._radar_slots if s.slot_index != slot_idx]
+        self._radar_slots.append(new_slot)
+        self._radar_slots.sort(key=lambda s: s.slot_index)
+
+    def score_signal(self, feed_id: int, content_hash: str, author_handle: str, score: int, caller: str) -> int:
+        self._require_relay(caller)
