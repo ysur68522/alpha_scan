@@ -673,3 +673,78 @@ def build_feed_table(contract: AlphaScanContract) -> List[str]:
     for f in sorted(contract._feeds.values(), key=lambda x: x.feed_id):
         lines.append(format_feed_line(f))
     return lines
+
+
+def build_pulse_table(contract: AlphaScanContract, feed_id: Optional[int] = None, limit: int = 30) -> List[str]:
+    lines = ["pulse_id | feed_id | score  | payload_hash      | emitted_at_ts"]
+    pulses = list(contract._pulses.values())
+    if feed_id is not None:
+        pulses = [p for p in pulses if p.feed_id == feed_id]
+    pulses.sort(key=lambda p: p.emitted_at_ts, reverse=True)
+    for p in pulses[:limit]:
+        lines.append(format_pulse_line(p))
+    return lines
+
+
+def build_signal_table(contract: AlphaScanContract, feed_id: Optional[int] = None, limit: int = 30) -> List[str]:
+    lines = ["signal_id | feed_id | author_handle     | score  | at_ts"]
+    signals = list(contract._signals.values())
+    if feed_id is not None:
+        signals = [s for s in signals if s.feed_id == feed_id]
+    signals.sort(key=lambda s: s.at_ts, reverse=True)
+    for s in signals[:limit]:
+        lines.append(format_signal_line(s))
+    return lines
+
+
+def build_radar_table(contract: AlphaScanContract) -> List[str]:
+    lines = ["slot_index | pulse_id | feed_id | score | at_ts"]
+    for s in contract.get_radar_slots():
+        lines.append(format_radar_slot(s))
+    return lines
+
+
+# -----------------------------------------------------------------------------
+# Time-window queries
+# -----------------------------------------------------------------------------
+
+
+def pulses_in_window(contract: AlphaScanContract, from_ts: int, to_ts: int) -> List[RadarPulse]:
+    return [p for p in contract._pulses.values() if from_ts <= p.emitted_at_ts <= to_ts]
+
+
+def signals_in_window(contract: AlphaScanContract, from_ts: int, to_ts: int) -> List[SocialSignal]:
+    return [s for s in contract._signals.values() if from_ts <= s.at_ts <= to_ts]
+
+
+def pulse_count_per_feed(contract: AlphaScanContract) -> Dict[int, int]:
+    out: Dict[int, int] = {}
+    for p in contract._pulses.values():
+        out[p.feed_id] = out.get(p.feed_id, 0) + 1
+    return out
+
+
+def signal_count_per_feed(contract: AlphaScanContract) -> Dict[int, int]:
+    out: Dict[int, int] = {}
+    for s in contract._signals.values():
+        out[s.feed_id] = out.get(s.feed_id, 0) + 1
+    return out
+
+
+# -----------------------------------------------------------------------------
+# Hash and ID helpers
+# -----------------------------------------------------------------------------
+
+
+def short_hash(h: str, prefix_len: int = 8, suffix_len: int = 4) -> str:
+    if not h or len(h) < prefix_len + suffix_len:
+        return h
+    if h.startswith("0x"):
+        return "0x" + h[2:2+prefix_len] + "…" + h[-suffix_len:]
+    return h[:prefix_len] + "…" + h[-suffix_len:]
+
+
+def parse_feed_id(s: str) -> Optional[int]:
+    try:
+        return int(s.strip())
+    except ValueError:
