@@ -598,3 +598,78 @@ def rank_signals_by_score(contract: AlphaScanContract, feed_id: Optional[int] = 
 
 
 def export_contract_snapshot(contract: AlphaScanContract) -> Dict[str, Any]:
+    return {
+        **get_config_snapshot(contract),
+        "feeds": {str(k): asdict(v) for k, v in contract._feeds.items()},
+        "pulses": {str(k): asdict(v) for k, v in contract._pulses.items()},
+        "signals": {str(k): asdict(v) for k, v in contract._signals.items()},
+        "radar_slots": [asdict(s) for s in contract._radar_slots],
+    }
+
+
+def export_feeds_csv(contract: AlphaScanContract) -> str:
+    lines = ["feed_id,source_tag,relay,registered_at_ts,active"]
+    for f in sorted(contract._feeds.values(), key=lambda x: x.feed_id):
+        lines.append(f"{f.feed_id},{f.source_tag},{f.relay},{f.registered_at_ts},{f.active}")
+    return "\n".join(lines)
+
+
+def export_pulses_csv(contract: AlphaScanContract, feed_id: Optional[int] = None) -> str:
+    lines = ["pulse_id,feed_id,payload_hash,score,emitted_at_ts,relayer"]
+    pulses = list(contract._pulses.values())
+    if feed_id is not None:
+        pulses = [p for p in pulses if p.feed_id == feed_id]
+    for p in sorted(pulses, key=lambda x: x.pulse_id):
+        lines.append(f"{p.pulse_id},{p.feed_id},{p.payload_hash},{p.score},{p.emitted_at_ts},{p.relayer}")
+    return "\n".join(lines)
+
+
+def export_signals_csv(contract: AlphaScanContract, feed_id: Optional[int] = None) -> str:
+    lines = ["signal_id,feed_id,content_hash,author_handle,score,at_ts"]
+    signals = list(contract._signals.values())
+    if feed_id is not None:
+        signals = [s for s in signals if s.feed_id == feed_id]
+    for s in sorted(signals, key=lambda x: x.signal_id):
+        lines.append(f"{s.signal_id},{s.feed_id},{s.content_hash},{s.author_handle},{s.score},{s.at_ts}")
+    return "\n".join(lines)
+
+
+# -----------------------------------------------------------------------------
+# Validation and guards
+# -----------------------------------------------------------------------------
+
+
+def require_feed_exists(contract: AlphaScanContract, feed_id: int) -> AlphaFeedConfig:
+    cfg = contract.get_feed(feed_id)
+    if cfg is None:
+        raise ValueError(ASCError.FEED_CAP)
+    return cfg
+
+
+def require_feed_active(contract: AlphaScanContract, feed_id: int) -> AlphaFeedConfig:
+    cfg = require_feed_exists(contract, feed_id)
+    if not cfg.active:
+        raise ValueError(ASCError.SCRAPE_DISABLED)
+    return cfg
+
+
+def require_not_locked(contract: AlphaScanContract) -> None:
+    if contract.locked:
+        raise ValueError(ASCError.RADAR_LOCKED)
+
+
+def require_valid_score(score: int) -> None:
+    if not (SCORE_MIN <= score <= SCORE_MAX):
+        raise ValueError(ASCError.INVALID_SCORE)
+
+
+# -----------------------------------------------------------------------------
+# Terminal table builders
+# -----------------------------------------------------------------------------
+
+
+def build_feed_table(contract: AlphaScanContract) -> List[str]:
+    lines = ["feed_id | source_tag           | relay       | active"]
+    for f in sorted(contract._feeds.values(), key=lambda x: x.feed_id):
+        lines.append(format_feed_line(f))
+    return lines
