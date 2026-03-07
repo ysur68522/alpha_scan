@@ -523,3 +523,78 @@ def pulses_newer_than(pulses: List[RadarPulse], min_age_sec: int) -> List[RadarP
 
 
 def latest_pulse_per_feed(contract: AlphaScanContract) -> Dict[int, RadarPulse]:
+    out: Dict[int, RadarPulse] = {}
+    for p in contract._pulses.values():
+        if p.feed_id not in out or p.emitted_at_ts > out[p.feed_id].emitted_at_ts:
+            out[p.feed_id] = p
+    return out
+
+
+# -----------------------------------------------------------------------------
+# Feed source type and priority (terminal-style)
+# -----------------------------------------------------------------------------
+
+
+class FeedSourceType(IntEnum):
+    X_TWITTER = 0
+    DISCORD = 1
+    TELEGRAM = 2
+    REDDIT = 3
+    CUSTOM = 4
+
+
+FEED_SOURCE_NAMES = {
+    FeedSourceType.X_TWITTER: "x_twitter",
+    FeedSourceType.DISCORD: "discord",
+    FeedSourceType.TELEGRAM: "telegram",
+    FeedSourceType.REDDIT: "reddit",
+    FeedSourceType.CUSTOM: "custom",
+}
+
+
+def feed_source_from_tag(tag: str) -> FeedSourceType:
+    t = tag.lower()
+    if "x" in t or "twitter" in t:
+        return FeedSourceType.X_TWITTER
+    if "discord" in t:
+        return FeedSourceType.DISCORD
+    if "telegram" in t or "tg" in t:
+        return FeedSourceType.TELEGRAM
+    if "reddit" in t:
+        return FeedSourceType.REDDIT
+    return FeedSourceType.CUSTOM
+
+
+# -----------------------------------------------------------------------------
+# Priority and ranking
+# -----------------------------------------------------------------------------
+
+
+def rank_feeds_by_pulse_count(contract: AlphaScanContract) -> List[Tuple[int, int]]:
+    counts: Dict[int, int] = {}
+    for p in contract._pulses.values():
+        counts[p.feed_id] = counts.get(p.feed_id, 0) + 1
+    return sorted(counts.items(), key=lambda x: x[1], reverse=True)
+
+
+def rank_feeds_by_avg_score(contract: AlphaScanContract) -> List[Tuple[int, float]]:
+    scores: Dict[int, List[int]] = {}
+    for p in contract._pulses.values():
+        scores.setdefault(p.feed_id, []).append(p.score)
+    out = [(fid, sum(s) / len(s)) for fid, s in scores.items()]
+    return sorted(out, key=lambda x: x[1], reverse=True)
+
+
+def rank_signals_by_score(contract: AlphaScanContract, feed_id: Optional[int] = None) -> List[SocialSignal]:
+    signals = list(contract._signals.values())
+    if feed_id is not None:
+        signals = [s for s in signals if s.feed_id == feed_id]
+    return sorted(signals, key=lambda s: s.score, reverse=True)
+
+
+# -----------------------------------------------------------------------------
+# Snapshot and export
+# -----------------------------------------------------------------------------
+
+
+def export_contract_snapshot(contract: AlphaScanContract) -> Dict[str, Any]:
