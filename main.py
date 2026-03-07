@@ -373,3 +373,78 @@ def validate_address(addr: str) -> bool:
 
 
 def mock_scrape_item(feed_id: int, content: str, author: str, url: str = "") -> ScrapeItem:
+    return ScrapeItem(
+        raw_id=content_hash(content + str(time.time()))[:16],
+        feed_id=feed_id,
+        content=content,
+        author=author,
+        url=url or f"https://x.com/{author}/status/{int(time.time())}",
+        scraped_at_ts=int(time.time()),
+        score=0,
+    )
+
+
+def mock_pulse_payload(feed_id: int, title: str) -> Dict[str, Any]:
+    return {"feed_id": feed_id, "title": title, "ts": int(time.time())}
+
+
+# -----------------------------------------------------------------------------
+# Feed aggregation and filters
+# -----------------------------------------------------------------------------
+
+
+def filter_pulses_by_score(pulses: List[RadarPulse], min_score: int, max_score: int) -> List[RadarPulse]:
+    return [p for p in pulses if min_score <= p.score <= max_score]
+
+
+def filter_signals_by_author(signals: List[SocialSignal], author: str) -> List[SocialSignal]:
+    return [s for s in signals if s.author_handle.lower() == author.lower()]
+
+
+def aggregate_score_for_feed(pulses: List[RadarPulse]) -> int:
+    if not pulses:
+        return 0
+    return sum(p.score for p in pulses) // len(pulses)
+
+
+def top_n_pulses(pulses: List[RadarPulse], n: int) -> List[RadarPulse]:
+    return sorted(pulses, key=lambda p: p.score, reverse=True)[:n]
+
+
+def top_n_signals(signals: List[SocialSignal], n: int) -> List[SocialSignal]:
+    return sorted(signals, key=lambda s: s.score, reverse=True)[:n]
+
+
+# -----------------------------------------------------------------------------
+# Terminal-style formatters (Bloomberg/AGiXT style)
+# -----------------------------------------------------------------------------
+
+
+def format_feed_line(cfg: AlphaFeedConfig) -> str:
+    return f"{cfg.feed_id:4} | {cfg.source_tag:20} | {cfg.relay[:10]}... | active={cfg.active}"
+
+
+def format_pulse_line(p: RadarPulse) -> str:
+    return f"{p.pulse_id:6} | feed={p.feed_id} | score={p.score:5} | {p.payload_hash[:18]}... | {p.emitted_at_ts}"
+
+
+def format_signal_line(s: SocialSignal) -> str:
+    return f"{s.signal_id:6} | feed={s.feed_id} | @{s.author_handle:16} | score={s.score:5} | {s.at_ts}"
+
+
+def format_radar_slot(s: RadarSlot) -> str:
+    return f"slot[{s.slot_index:2}] pulse={s.pulse_id} feed={s.feed_id} score={s.score}"
+
+
+# -----------------------------------------------------------------------------
+# Extended contract methods (batch getters, snapshot)
+# -----------------------------------------------------------------------------
+
+
+def get_feeds_batch(contract: AlphaScanContract, from_id: int, to_id: int) -> List[Optional[AlphaFeedConfig]]:
+    return [contract.get_feed(i) for i in range(from_id, to_id + 1)]
+
+
+def get_pulses_batch(contract: AlphaScanContract, from_id: int, to_id: int) -> List[Optional[RadarPulse]]:
+    return [contract.get_pulse(i) for i in range(from_id, to_id + 1)]
+
