@@ -298,3 +298,78 @@ class AlphaScanContract:
 
     def get_signals_for_feed(self, feed_id: int, limit: int = 50) -> List[SocialSignal]:
         out = [s for s in self._signals.values() if s.feed_id == feed_id]
+        out.sort(key=lambda s: s.at_ts, reverse=True)
+        return out[:limit]
+
+    def is_pulse_stale(self, pulse_id: int) -> bool:
+        p = self._pulses.get(pulse_id)
+        if not p:
+            return True
+        return (int(time.time()) - p.emitted_at_ts) > MAX_PULSE_AGE_SEC
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "feed_counter": self._feed_counter,
+            "pulse_counter": self._pulse_counter,
+            "signal_counter": self._signal_counter,
+            "feeds": {str(k): asdict(v) for k, v in self._feeds.items()},
+            "pulses": {str(k): asdict(v) for k, v in self._pulses.items()},
+            "signals": {str(k): asdict(v) for k, v in self._signals.items()},
+            "scrape_buffer_len": len(self._scrape_buffer),
+            "radar_slots": [asdict(s) for s in self._radar_slots],
+            "locked": self._locked,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> AlphaScanContract:
+        c = cls()
+        c._feed_counter = d.get("feed_counter", 0)
+        c._pulse_counter = d.get("pulse_counter", 0)
+        c._signal_counter = d.get("signal_counter", 0)
+        c._locked = d.get("locked", False)
+        for k, v in d.get("feeds", {}).items():
+            c._feeds[int(k)] = AlphaFeedConfig(**v)
+        for k, v in d.get("pulses", {}).items():
+            c._pulses[int(k)] = RadarPulse(**v)
+        for k, v in d.get("signals", {}).items():
+            c._signals[int(k)] = SocialSignal(**v)
+        for s in d.get("radar_slots", []):
+            c._radar_slots.append(RadarSlot(**s))
+        return c
+
+
+# -----------------------------------------------------------------------------
+# Helpers: hashing, scoring, validation
+# -----------------------------------------------------------------------------
+
+
+def content_hash(text: str) -> str:
+    return "0x" + hashlib.sha256(text.encode()).hexdigest()
+
+
+def payload_hash(payload: Dict[str, Any]) -> str:
+    return "0x" + hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
+def score_from_engagement(likes: int, retweets: int, replies: int) -> int:
+    raw = min(SCORE_MAX, likes * 2 + retweets * 3 + replies)
+    return max(SCORE_MIN, raw)
+
+
+def normalize_handle(handle: str) -> str:
+    s = handle.strip().lstrip("@")
+    return s[:64] if s else ""
+
+
+def validate_address(addr: str) -> bool:
+    if not addr or len(addr) != 42 or not addr.startswith("0x"):
+        return False
+    return all(c in "0123456789aAbBcCdDeEfF" for c in addr[2:])
+
+
+# -----------------------------------------------------------------------------
+# Scraper sim / mock (no real X API)
+# -----------------------------------------------------------------------------
+
+
+def mock_scrape_item(feed_id: int, content: str, author: str, url: str = "") -> ScrapeItem:
