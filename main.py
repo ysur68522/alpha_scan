@@ -748,3 +748,78 @@ def parse_feed_id(s: str) -> Optional[int]:
     try:
         return int(s.strip())
     except ValueError:
+        return None
+
+
+def parse_pulse_id(s: str) -> Optional[int]:
+    try:
+        return int(s.strip())
+    except ValueError:
+        return None
+
+
+def parse_signal_id(s: str) -> Optional[int]:
+    try:
+        return int(s.strip())
+    except ValueError:
+        return None
+
+
+# -----------------------------------------------------------------------------
+# Mock data generators for testing
+# -----------------------------------------------------------------------------
+
+
+def generate_mock_feeds(n: int) -> List[Tuple[str, str]]:
+    sources = ["x_crypto", "x_defi", "discord_alpha", "telegram_signal", "reddit_cc"]
+    return [(f"feed_{sources[i % len(sources)]}_{i}", ALPHA_SCAN_RELAY) for i in range(n)]
+
+
+def generate_mock_pulse(feed_id: int, score: Optional[int] = None) -> Dict[str, Any]:
+    return {
+        "feed_id": feed_id,
+        "payload_hash": content_hash(str(time.time())),
+        "score": score if score is not None else (SCORE_MIN + (int(time.time()) % (SCORE_MAX - SCORE_MIN))),
+        "emitted_at_ts": int(time.time()),
+    }
+
+
+def generate_mock_signal(feed_id: int, author: str = "user") -> Dict[str, Any]:
+    return {
+        "feed_id": feed_id,
+        "content_hash": content_hash(author + str(time.time())),
+        "author_handle": author,
+        "score": int(time.time()) % (SCORE_MAX - SCORE_MIN) + SCORE_MIN,
+        "at_ts": int(time.time()),
+    }
+
+
+# -----------------------------------------------------------------------------
+# Export
+# -----------------------------------------------------------------------------
+
+__all__ = [
+    "AlphaScanContract",
+    "AlphaFeedConfig",
+    "RadarPulse",
+    "SocialSignal",
+    "ScrapeItem",
+    "RadarSlot",
+    "ASCError",
+    "ASCEvent",
+    "ALPHA_SCAN_RELAY",
+    "ALPHA_SCAN_GUARDIAN",
+    "ALPHA_SCAN_TREASURY",
+    "ALPHA_SCAN_FALLBACK",
+    "ALPHA_SCAN_NAMESPACE",
+    "ALPHA_SCAN_VERSION",
+    "content_hash",
+    "payload_hash",
+    "score_from_engagement",
+    "normalize_handle",
+    "validate_address",
+    "mock_scrape_item",
+    "mock_pulse_payload",
+    "MAX_FEEDS",
+    "MAX_PULSE_AGE_SEC",
+    "SCORE_MIN",
