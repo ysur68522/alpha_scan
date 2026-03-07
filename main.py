@@ -823,3 +823,78 @@ __all__ = [
     "MAX_FEEDS",
     "MAX_PULSE_AGE_SEC",
     "SCORE_MIN",
+    "SCORE_MAX",
+    "BATCH_SCRAPE_MAX",
+    "RADAR_SLOT_COUNT",
+    "FeedSourceType",
+    "FEED_SOURCE_NAMES",
+    "feed_source_from_tag",
+    "filter_pulses_by_score",
+    "filter_signals_by_author",
+    "aggregate_score_for_feed",
+    "top_n_pulses",
+    "top_n_signals",
+    "format_feed_line",
+    "format_pulse_line",
+    "format_signal_line",
+    "format_radar_slot",
+    "get_feeds_batch",
+    "get_pulses_batch",
+    "get_signals_batch",
+    "get_config_snapshot",
+    "get_feed_ids_active",
+    "count_stale_pulses",
+    "export_contract_snapshot",
+    "export_feeds_csv",
+    "export_pulses_csv",
+    "export_signals_csv",
+    "require_feed_exists",
+    "require_feed_active",
+    "require_not_locked",
+    "require_valid_score",
+    "build_feed_table",
+    "build_pulse_table",
+    "build_signal_table",
+    "build_radar_table",
+    "pulses_in_window",
+    "signals_in_window",
+    "pulse_count_per_feed",
+    "signal_count_per_feed",
+    "short_hash",
+    "parse_feed_id",
+    "parse_pulse_id",
+    "parse_signal_id",
+    "generate_mock_feeds",
+    "generate_mock_pulse",
+    "generate_mock_signal",
+    "rank_feeds_by_pulse_count",
+    "rank_feeds_by_avg_score",
+    "rank_signals_by_score",
+    "pulses_older_than",
+    "pulses_newer_than",
+    "latest_pulse_per_feed",
+]
+
+
+# -----------------------------------------------------------------------------
+# Event log simulation (terminal-style audit trail)
+# -----------------------------------------------------------------------------
+
+
+@dataclass
+class EventLogEntry:
+    event_type: str
+    at_ts: int
+    payload: Dict[str, Any]
+
+
+_event_log: List[EventLogEntry] = []
+
+
+def log_event(event_type: str, payload: Dict[str, Any]) -> None:
+    _event_log.append(EventLogEntry(event_type=event_type, at_ts=int(time.time()), payload=payload))
+
+
+def get_event_log(limit: int = 100) -> List[EventLogEntry]:
+    return _event_log[-limit:] if _event_log else []
+
