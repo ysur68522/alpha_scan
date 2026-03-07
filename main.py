@@ -1123,3 +1123,78 @@ def emit_pulses_batch(contract: AlphaScanContract, feed_id: int, payloads: List[
 
 # -----------------------------------------------------------------------------
 # Radar slot summary
+# -----------------------------------------------------------------------------
+
+
+def radar_slot_summary(contract: AlphaScanContract) -> str:
+    slots = contract.get_radar_slots()
+    if not slots:
+        return "No slots"
+    parts = [f"slot[{s.slot_index}]={s.score}" for s in slots]
+    return " ".join(parts[:8]) + (" ..." if len(parts) > 8 else "")
+
+
+def radar_heatmap(contract: AlphaScanContract) -> List[int]:
+    out = [0] * RADAR_SLOT_COUNT
+    for s in contract.get_radar_slots():
+        out[s.slot_index] = s.score
+    return out
+
+
+# -----------------------------------------------------------------------------
+# Content and URL helpers
+# -----------------------------------------------------------------------------
+
+
+def extract_urls(text: str) -> List[str]:
+    url_pattern = re.compile(r"https?://[^\s]+")
+    return url_pattern.findall(text)
+
+
+def truncate_content(text: str, max_len: int = 140) -> str:
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 3] + "..."
+
+
+# -----------------------------------------------------------------------------
+# Timestamp formatters
+# -----------------------------------------------------------------------------
+
+
+def ts_to_iso(ts: int) -> str:
+    return datetime.utcfromtimestamp(ts).isoformat() + "Z"
+
+
+def ts_to_short(ts: int) -> str:
+    return datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+
+
+def pulse_age_sec(ts: int) -> int:
+    return int(time.time()) - ts
+
+
+# -----------------------------------------------------------------------------
+# Constants for UI/terminal
+# -----------------------------------------------------------------------------
+
+
+DISPLAY_COLUMNS_FEED = 80
+DISPLAY_COLUMNS_PULSE = 100
+DISPLAY_COLUMNS_SIGNAL = 100
+PAGINATION_DEFAULT = 20
+MAX_DISPLAY_FEEDS = 48
+MAX_DISPLAY_PULSES = 100
+MAX_DISPLAY_SIGNALS = 100
+
+
+# -----------------------------------------------------------------------------
+# Diff and delta (for incremental sync)
+# -----------------------------------------------------------------------------
+
+
+def pulse_ids_since(contract: AlphaScanContract, since_ts: int) -> List[int]:
+    return [p.pulse_id for p in contract._pulses.values() if p.emitted_at_ts >= since_ts]
+
+
+def signal_ids_since(contract: AlphaScanContract, since_ts: int) -> List[int]:
