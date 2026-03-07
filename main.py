@@ -1273,3 +1273,71 @@ def avg_score_overall(contract: AlphaScanContract) -> float:
 def avg_score_signals_overall(contract: AlphaScanContract) -> float:
     signals = list(contract._signals.values())
     if not signals:
+        return 0.0
+    return sum(s.score for s in signals) / len(signals)
+
+
+def max_pulse_score(contract: AlphaScanContract) -> int:
+    if not contract._pulses:
+        return 0
+    return max(p.score for p in contract._pulses.values())
+
+
+def max_signal_score(contract: AlphaScanContract) -> int:
+    if not contract._signals:
+        return 0
+    return max(s.score for s in contract._signals.values())
+
+
+# -----------------------------------------------------------------------------
+# Idempotency keys (for dedupe in scrapes)
+# -----------------------------------------------------------------------------
+
+
+def idempotency_key(feed_id: int, content_hash: str) -> str:
+    return f"{feed_id}:{content_hash}"
+
+
+def idempotency_key_pulse(feed_id: int, payload_hash: str, ts: int) -> str:
+    return f"{feed_id}:{payload_hash}:{ts}"
+
+
+# -----------------------------------------------------------------------------
+# Defaults and fallbacks
+# -----------------------------------------------------------------------------
+
+
+def default_relay() -> str:
+    return ALPHA_SCAN_RELAY
+
+
+def default_guardian() -> str:
+    return ALPHA_SCAN_GUARDIAN
+
+
+def default_treasury() -> str:
+    return ALPHA_SCAN_TREASURY
+
+
+def default_fallback() -> str:
+    return ALPHA_SCAN_FALLBACK
+
+
+def default_refresh_interval() -> int:
+    return DEFAULT_REFRESH_INTERVAL_SEC
+
+
+def default_batch_scrape_max() -> int:
+    return BATCH_SCRAPE_MAX
+
+
+def default_radar_slot_count() -> int:
+    return RADAR_SLOT_COUNT
+
+
+def default_max_pulse_age() -> int:
+    return MAX_PULSE_AGE_SEC
+
+
+def default_max_feeds() -> int:
+    return MAX_FEEDS
