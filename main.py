@@ -973,3 +973,78 @@ def dedupe_by_content_hash(signals: List[SocialSignal]) -> List[SocialSignal]:
 def dedupe_pulses_by_feed_slot(pulses: List[RadarPulse]) -> List[RadarPulse]:
     by_slot: Dict[int, RadarPulse] = {}
     for p in pulses:
+        slot = p.feed_id % RADAR_SLOT_COUNT
+        if slot not in by_slot or p.emitted_at_ts > by_slot[slot].emitted_at_ts:
+            by_slot[slot] = p
+    return list(by_slot.values())
+
+
+# -----------------------------------------------------------------------------
+# Refresh interval and throttle
+# -----------------------------------------------------------------------------
+
+
+def should_refresh(last_ts: int, interval_sec: int = DEFAULT_REFRESH_INTERVAL_SEC) -> bool:
+    return (int(time.time()) - last_ts) >= interval_sec
+
+
+def next_refresh_ts(last_ts: int, interval_sec: int = DEFAULT_REFRESH_INTERVAL_SEC) -> int:
+    return last_ts + interval_sec
+
+
+# -----------------------------------------------------------------------------
+# Serialization for state persistence
+# -----------------------------------------------------------------------------
+
+
+def contract_to_json(contract: AlphaScanContract) -> str:
+    return json.dumps(contract.to_dict(), indent=2)
+
+
+def contract_from_json(s: str) -> AlphaScanContract:
+    return AlphaScanContract.from_dict(json.loads(s))
+
+
+def save_contract_to_file(contract: AlphaScanContract, path: str) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(contract_to_json(contract))
+
+
+def load_contract_from_file(path: str) -> AlphaScanContract:
+    with open(path, "r", encoding="utf-8") as f:
+        return contract_from_json(f.read())
+
+
+# -----------------------------------------------------------------------------
+# Scrape buffer stats
+# -----------------------------------------------------------------------------
+
+
+def scrape_buffer_len(contract: AlphaScanContract) -> int:
+    return len(contract._scrape_buffer)
+
+
+def scrape_buffer_by_feed(contract: AlphaScanContract) -> Dict[int, int]:
+    out: Dict[int, int] = {}
+    for item in contract._scrape_buffer:
+        out[item.feed_id] = out.get(item.feed_id, 0) + 1
+    return out
+
+
+# -----------------------------------------------------------------------------
+# Alpha feed health check
+# -----------------------------------------------------------------------------
+
+
+def feed_health(contract: AlphaScanContract, feed_id: int) -> Dict[str, Any]:
+    cfg = contract.get_feed(feed_id)
+    if not cfg:
+        return {"exists": False}
+    pulses = contract.get_pulses_for_feed(feed_id, limit=100)
+    signals = contract.get_signals_for_feed(feed_id, limit=100)
+    latest_ts = max([p.emitted_at_ts for p in pulses] or [0])
+    return {
+        "exists": True,
+        "active": cfg.active,
+        "pulse_count": len(pulses),
+        "signal_count": len(signals),
