@@ -448,3 +448,78 @@ def get_feeds_batch(contract: AlphaScanContract, from_id: int, to_id: int) -> Li
 def get_pulses_batch(contract: AlphaScanContract, from_id: int, to_id: int) -> List[Optional[RadarPulse]]:
     return [contract.get_pulse(i) for i in range(from_id, to_id + 1)]
 
+
+def get_signals_batch(contract: AlphaScanContract, from_id: int, to_id: int) -> List[Optional[SocialSignal]]:
+    return [contract.get_signal(i) for i in range(from_id, to_id + 1)]
+
+
+def get_config_snapshot(contract: AlphaScanContract) -> Dict[str, Any]:
+    return {
+        "feed_count": contract.get_feed_count(),
+        "pulse_count": contract.get_pulse_count(),
+        "signal_count": contract.get_signal_count(),
+        "locked": contract.locked,
+        "relay": contract.relay,
+        "guardian": contract.guardian,
+        "namespace": ALPHA_SCAN_NAMESPACE,
+        "version": ALPHA_SCAN_VERSION,
+    }
+
+
+def get_feed_ids_active(contract: AlphaScanContract) -> List[int]:
+    return [f.feed_id for f in contract._feeds.values() if f.active]
+
+
+def count_stale_pulses(contract: AlphaScanContract) -> int:
+    return sum(1 for pid in contract._pulses if contract.is_pulse_stale(pid))
+
+
+# -----------------------------------------------------------------------------
+# Scrape buffer management (within contract state)
+# -----------------------------------------------------------------------------
+
+
+def flush_scrape_buffer_to_signals(contract: AlphaScanContract, caller: str) -> int:
+    contract._require_relay(caller)
+    count = 0
+    for item in contract._scrape_buffer:
+        if item.feed_id not in contract._feeds:
+            continue
+        score = item.score or score_from_engagement(
+            item.metadata.get("likes", 0),
+            item.metadata.get("retweets", 0),
+            item.metadata.get("replies", 0),
+        )
+        contract._signal_counter += 1
+        sid = contract._signal_counter
+        sig = SocialSignal(
+            signal_id=sid,
+            feed_id=item.feed_id,
+            content_hash=content_hash(item.content),
+            author_handle=item.author,
+            score=score,
+            at_ts=item.scraped_at_ts,
+            metadata={},
+        )
+        contract._signals[sid] = sig
+        count += 1
+    contract._scrape_buffer.clear()
+    return count
+
+
+# -----------------------------------------------------------------------------
+# Pulse age and staleness helpers
+# -----------------------------------------------------------------------------
+
+
+def pulses_older_than(pulses: List[RadarPulse], max_age_sec: int) -> List[RadarPulse]:
+    now = int(time.time())
+    return [p for p in pulses if (now - p.emitted_at_ts) > max_age_sec]
+
+
+def pulses_newer_than(pulses: List[RadarPulse], min_age_sec: int) -> List[RadarPulse]:
+    now = int(time.time())
+    return [p for p in pulses if (now - p.emitted_at_ts) <= min_age_sec]
+
+
+def latest_pulse_per_feed(contract: AlphaScanContract) -> Dict[int, RadarPulse]:
